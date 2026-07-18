@@ -126,10 +126,11 @@ def train_dpo(base_model: str, adapter_path: str, pref_data: str, out_path: str,
             data.append(json.loads(line))
     ds = Dataset.from_list(data)
 
+    from trl import DPOConfig
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # Use same model as reference (peft)
-        args=TrainingArguments(
+        args=DPOConfig(
             output_dir=out_path,
             per_device_train_batch_size=2,
             gradient_accumulation_steps=8,
@@ -143,12 +144,11 @@ def train_dpo(base_model: str, adapter_path: str, pref_data: str, out_path: str,
             remove_unused_columns=False,
             report_to="none",
             seed=42,
+            beta=0.1,
+            max_length=4096,
         ),
-        beta=0.1,
         train_dataset=ds,
-        tokenizer=tokenizer,
-        max_length=4096,
-        max_prompt_length=2048,
+        processing_class=tokenizer,
     )
 
     print("[MODO S1] DPO training...")
