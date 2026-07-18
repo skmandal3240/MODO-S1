@@ -1,21 +1,22 @@
-# MODO S1 — Docker image for H100/A100 deployment
+# MODO S1 — Production Dockerfile for H100/A100 deployment
 FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PYTHONUNBUFFERED=1
 ENV PIP_DISABLE_PIP_VERSION_CHECK=1
 
-# System deps
+# System deps for audio/video
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3.11 python3.11-dev python3.11-venv \
-    git curl wget ffmpeg libsndfile1 libglib2.0-0 libsm6 libxext6 libxrender1 libgl1-mesa-glx \
+    git curl wget ffmpeg libsndfile1 libsox-dev \
+    libglib2.0-0 libsm6 libxext6 libxrender1 libgl1-mesa-glx \
     && rm -rf /var/lib/apt/lists/*
 
 # Python venv
 RUN python3.11 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Upgrade pip and install core
+# Upgrade pip
 RUN pip install --upgrade pip setuptools wheel
 
 # Install PyTorch with CUDA 12.4
@@ -25,15 +26,24 @@ RUN pip install torch torchvision torchaudio --index-url https://download.pytorc
 COPY requirements.txt /tmp/requirements.txt
 RUN pip install -r /tmp/requirements.txt
 
-# Install vLLM from source for latest features (or use prebuilt)
-RUN pip install vllm==0.5.3.post1 --no-build-isolation
+# Install vLLM (may need to build from source for latest)
+RUN pip install vllm --no-build-isolation
+
+# Install audio/video extras
+RUN pip install \
+    whisper@git+https://github.com/openai/whisper.git \
+    kokoro-onnx soundfile \
+    diffusers[flux,ltx] transformers accelerate \
+    imageio imageio-ffmpeg
 
 # App code
 WORKDIR /app
 COPY . /app
 
-# Download models at build time (optional, can be done at runtime)
-# RUN python -c "from transformers import AutoTokenizer; AutoTokenizer.from_pretrained('nvidia/Nemotron-3-Ultra')"
+# Model cache dir
+ENV HF_HOME=/models
+ENV TRANSFORMERS_CACHE=/models
+RUN mkdir -p /models
 
 EXPOSE 8000
 
