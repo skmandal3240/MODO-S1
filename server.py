@@ -234,13 +234,14 @@ async def transcribe_audio(
     temperature: float = Form(0),
 ):
     # Save uploaded file
-    with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
+    suffix = Path(file.filename).suffix if file.filename else ".wav"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
 
     try:
-        model = get_whisper()
-        result = model.transcribe(
+        whisper_model = get_whisper()
+        result = whisper_model.transcribe(
             tmp_path,
             language=language,
             initial_prompt=prompt,
