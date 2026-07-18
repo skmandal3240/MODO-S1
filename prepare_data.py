@@ -4,11 +4,11 @@ MODO S1 — Scientific data preparation for physics/engineering understanding
 Downloads and formats open scientific datasets for training.
 """
 
-import os
-import json
 import argparse
+import json
 from pathlib import Path
-from datasets import load_dataset, concatenate_datasets
+
+from datasets import load_dataset
 from tqdm import tqdm
 
 # ========== Scientific Datasets (all open/permissive) ==========
@@ -24,7 +24,7 @@ SCIENTIFIC_SOURCES = {
         "split": "train",
         "filter": lambda x: any(c in x["categories"] for c in ["eess.", "cs.RO", "cs.SY", "cs.CE", "cs.ET"]),
     },
-    
+
     # Textbooks / Educational
     "openstax_physics": {
         "dataset": "openstax/physics",
@@ -38,7 +38,7 @@ SCIENTIFIC_SOURCES = {
         "dataset": "physionet/physionet2023",
         "split": "train",
     },
-    
+
     # Materials science / Chemistry (for batteries, semiconductors)
     "materials_project": {
         "dataset": "materialsproject/mp-2024",
@@ -48,14 +48,14 @@ SCIENTIFIC_SOURCES = {
         "dataset": "pubchem/bioassays",
         "split": "train",
     },
-    
+
     # Scientific code
     "scientific_code": {
         "dataset": "bigcode/scientific-code",
         "split": "train",
         "filter": lambda x: x["language"] in ["python", "cpp", "fortran", "julia", "matlab", "cuda"],
     },
-    
+
     # Engineering Q&A
     "engineering_se": {
         "dataset": "stackexchange/engineering",
@@ -69,7 +69,7 @@ SCIENTIFIC_SOURCES = {
         "dataset": "stackexchange/electronics",
         "split": "train",
     },
-    
+
     # Datasheets / Component specs
     "datasheets": {
         "dataset": "hf-internal-testing/datasheets",
@@ -101,7 +101,7 @@ def format_scientific(example, source_name):
             {"role": "user", "content": f"Explain this research paper:\n{text}"},
             {"role": "assistant", "content": f"This {cats.split()[0] if cats else 'physics/engineering'} paper covers: {abstract[:2000]}"}
         ]}
-    
+
     if source_name in ["engineering_se", "physics_se", "electronics_se"]:
         q = example.get("question", "")
         a = example.get("accepted_answer", "") or example.get("top_answer", "")
@@ -110,7 +110,7 @@ def format_scientific(example, source_name):
                 {"role": "user", "content": q},
                 {"role": "assistant", "content": a[:4000]}
             ]}
-    
+
     if source_name == "scientific_code":
         lang = example.get("language", "Python")
         doc = example.get("docstring", "")
@@ -120,27 +120,27 @@ def format_scientific(example, source_name):
                 {"role": "user", "content": f"Write {lang} code for: {doc[:500]}"},
                 {"role": "assistant", "content": code[:8000]}
             ]}
-    
+
     if source_name in ["materials_project", "pubchem_bioassays"]:
         # Structured data - create analysis prompt
         return {"messages": [
             {"role": "user", "content": f"Analyze this scientific data: {json.dumps(example)[:3000]}"},
             {"role": "assistant", "content": f"Key properties: {list(example.keys())[:10]}. This requires domain-specific computational analysis."}
         ]}
-    
+
     if source_name in ["openstax_physics", "khan_academy_physics", "physionet"]:
         content = example.get("text") or example.get("content") or str(example)[:2000]
         return {"messages": [
             {"role": "user", "content": f"Teach me: {content[:1500]}"},
             {"role": "assistant", "content": content[1500:3000] if len(content) > 1500 else "This covers fundamental physics concepts."}
         ]}
-    
+
     if source_name == "datasheets":
         return {"messages": [
             {"role": "user", "content": f"Extract key specifications from this datasheet: {str(example)[:3000]}"},
             {"role": "assistant", "content": "Key specs extracted: voltage, current, timing, thermal, package. Ready for component selection."}
         ]}
-    
+
     # Default
     text = example.get("text") or example.get("content") or str(example)[:2000]
     return {"messages": [{"role": "user", "content": text[:1000]}, {"role": "assistant", "content": text[1000:2000]}]}
@@ -159,13 +159,13 @@ def format_general(example, source_name):
             msgs.append({"role": "user", "content": c[:2000]})
             msgs.append({"role": "assistant", "content": c[2000:]})
         return {"messages": msgs}
-    
+
     if source_name == "codeparrot":
         return {"messages": [
             {"role": "user", "content": f"Write {example.get('language', 'Python')} code: {example.get('docstring', '')[:500]}"},
             {"role": "assistant", "content": example.get("code", "")[:8000]}
         ]}
-    
+
     if source_name in ["ultrachat", "function_calling"]:
         if "messages" in example:
             return {"messages": example["messages"]}
@@ -173,7 +173,7 @@ def format_general(example, source_name):
             {"role": "user", "content": example.get("prompt", "")},
             {"role": "assistant", "content": example.get("completion", "") or example.get("response", "")}
         ]}
-    
+
     if source_name in ["indic_trans2", "samanantar", "bhashini"]:
         src = example.get("src_text") or example.get("source", "")
         tgt = example.get("tgt_text") or example.get("target", "")
@@ -183,7 +183,7 @@ def format_general(example, source_name):
                 {"role": "user", "content": f"Translate to {lang}: {src}"},
                 {"role": "assistant", "content": tgt}
             ]}
-    
+
     return None
 
 
@@ -196,34 +196,31 @@ def main():
     args = ap.parse_args()
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
-    
+
     all_sources = {}
     all_sources.update(SCIENTIFIC_SOURCES)
     all_sources.update(GENERAL_SOURCES)
-    
+
     if args.sources:
         all_sources = {k: v for k, v in all_sources.items() if k in args.sources}
-    
+
     scientific_keys = set(SCIENTIFIC_SOURCES.keys())
-    general_keys = set(GENERAL_SOURCES.keys())
-    
     scientific_target = int(args.max_samples * args.scientific_ratio)
     general_target = args.max_samples - scientific_target
-    
     print(f"[MODO S1] Target: {scientific_target} scientific + {general_target} general = {args.max_samples} total")
-    
+
     with open(args.out, "w") as f:
         # Scientific first
         sci_count = 0
         gen_count = 0
-        
+
         for name, cfg in tqdm(all_sources.items(), desc="Loading sources"):
             is_sci = name in scientific_keys
             if is_sci and sci_count >= scientific_target:
                 continue
             if not is_sci and gen_count >= general_target:
                 continue
-            
+
             try:
                 print(f"  Loading {name}...")
                 ds_kwargs = {"split": cfg.get("split", "train")}
@@ -231,18 +228,18 @@ def main():
                     ds = load_dataset(cfg["dataset"], cfg["subset"], **ds_kwargs)
                 else:
                     ds = load_dataset(cfg["dataset"], **ds_kwargs)
-                
+
                 if "filter" in cfg:
                     ds = ds.filter(cfg["filter"])
-                
+
                 formatter = format_scientific if is_sci else format_general
-                
+
                 for ex in ds:
                     if is_sci and sci_count >= scientific_target:
                         break
                     if not is_sci and gen_count >= general_target:
                         break
-                    
+
                     formatted = formatter(ex, name)
                     if formatted and formatted.get("messages"):
                         f.write(json.dumps(formatted) + "\n")
@@ -250,11 +247,11 @@ def main():
                             sci_count += 1
                         else:
                             gen_count += 1
-                            
+
             except Exception as e:
                 print(f"  [SKIP] {name}: {e}")
                 continue
-    
+
     total = sci_count + gen_count
     print(f"[MODO S1] Done. Total samples: {total} (scientific: {sci_count}, general: {gen_count})")
 

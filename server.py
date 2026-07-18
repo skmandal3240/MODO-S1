@@ -5,24 +5,21 @@ Routes requests to: Nemotron 3 Ultra (text/code), Whisper (audio), Flux (image),
 """
 
 import os
-import asyncio
-import base64
 import tempfile
 import uuid
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
-from fastapi.responses import StreamingResponse, FileResponse
-from pydantic import BaseModel, Field
 import uvicorn
+
+# Audio: Whisper
+import whisper
+from fastapi import FastAPI, Form, HTTPException, UploadFile
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
 
 # Text/Code: vLLM with Nemotron + LoRA
 from vllm import LLM, SamplingParams
 from vllm.lora.request import LoRARequest
-
-# Audio: Whisper
-import whisper
 
 # TTS: Kokoro
 try:
@@ -33,8 +30,8 @@ except ImportError:
 
 # Image: Flux (via diffusers)
 try:
-    from diffusers import FluxPipeline
     import torch
+    from diffusers import FluxPipeline
     FLUX_AVAILABLE = True
 except ImportError:
     FLUX_AVAILABLE = False
@@ -50,22 +47,22 @@ except ImportError:
 # ========== Models ==========
 class ChatMessage(BaseModel):
     role: str
-    content: str | List[Dict]  # Support text + multimodal content
-    name: Optional[str] = None
+    content: str | list[dict]  # Support text + multimodal content
+    name: str | None = None
 
 class ChatCompletionRequest(BaseModel):
     model: str
-    messages: List[ChatMessage]
+    messages: list[ChatMessage]
     temperature: float = 0.7
     max_tokens: int = 4096
     stream: bool = False
-    tools: Optional[List[Dict]] = None
-    tool_choice: Optional[str] = None
+    tools: list[dict] | None = None
+    tool_choice: str | None = None
 
 class AudioTranscriptionRequest(BaseModel):
     model: str = "whisper-1"
-    language: Optional[str] = None
-    prompt: Optional[str] = None
+    language: str | None = None
+    prompt: str | None = None
     response_format: str = "json"
     temperature: float = 0
 
@@ -94,14 +91,14 @@ class VideoGenRequest(BaseModel):
 
 
 # ========== Globals (lazy-loaded) ==========
-llm: Optional[LLM] = None
+llm: LLM | None = None
 whisper_model = None
 kokoro_pipeline = None
 flux_pipe = None
 ltx_pipe = None
 
 
-def get_llm(model_path: str, adapter_path: Optional[str] = None):
+def get_llm(model_path: str, adapter_path: str | None = None):
     global llm
     if llm is None:
         print(f"[MODO S1] Loading vLLM: {model_path}")
@@ -180,8 +177,8 @@ async def startup():
 # ---------- Chat Completions ----------
 @app.post("/v1/chat/completions")
 async def chat_completions(req: ChatCompletionRequest):
-    l = get_llm(os.getenv("MODO_MODEL", "nvidia/Nemotron-3-Ultra"), os.getenv("MODO_ADAPTER"))
-    
+    llm = get_llm(os.getenv("MODO_MODEL", "nvidia/Nemotron-3-Ultra"), os.getenv("MODO_ADAPTER"))
+
     # Build messages with system prompt
     messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for m in req.messages:
@@ -205,12 +202,12 @@ async def chat_completions(req: ChatCompletionRequest):
 
     if req.stream:
         async def stream_gen():
-            async for output in l.generate_async(messages, params, lora_request=lora_req):
+            async for output in llm.generate_async(messages, params, lora_request=lora_req):
                 yield f"data: {output}\n\n"
             yield "data: [DONE]\n\n"
         return StreamingResponse(stream_gen(), media_type="text/event-stream")
 
-    outputs = l.generate(messages, params, lora_request=lora_req)
+    outputs = llm.generate(messages, params, lora_request=lora_req)
     text = outputs[0].outputs[0].text
 
     return {
@@ -229,10 +226,10 @@ async def chat_completions(req: ChatCompletionRequest):
 # ---------- Audio Transcription ----------
 @app.post("/v1/audio/transcriptions")
 async def transcribe_audio(
-    file: UploadFile = File(...),
+    file: UploadFile,
     model: str = Form("whisper-1"),
-    language: Optional[str] = Form(None),
-    prompt: Optional[str] = Form(None),
+    language: str | None = Form(None),
+    prompt: str | None = Form(None),
     response_format: str = Form("json"),
     temperature: float = Form(0),
 ):
@@ -240,7 +237,7 @@ async def transcribe_audio(
     with tempfile.NamedTemporaryFile(delete=False, suffix=Path(file.filename).suffix) as tmp:
         tmp.write(await file.read())
         tmp_path = tmp.name
-    
+
     try:
         model = get_whisper()
         result = model.transcribe(
@@ -249,7 +246,7 @@ async def transcribe_audio(
             initial_prompt=prompt,
             temperature=temperature,
         )
-        
+
         if response_format == "json":
             return {"text": result["text"]}
         elif response_format == "text":
@@ -280,20 +277,21 @@ async def text_to_speech(req: TTSRequest):
     pipe = get_kokoro()
     if not pipe:
         raise HTTPException(501, "TTS not available — install kokoro")
-    
+
     generator = pipe(req.input, voice=req.voice, speed=req.speed)
     audio_chunks = []
     for _, _, audio in generator:
         audio_chunks.append(audio)
-    
-    import soundfile as sf
+
     import io
-    
+
+    import soundfile as sf
+
     full_audio = np.concatenate(audio_chunks)
     buf = io.BytesIO()
     sf.write(buf, full_audio, 24000, format=req.response_format.upper())
     buf.seek(0)
-    
+
     return StreamingResponse(buf, media_type=f"audio/{req.response_format}")
 
 
@@ -303,9 +301,9 @@ async def generate_image(req: ImageGenRequest):
     pipe = get_flux()
     if not pipe:
         raise HTTPException(501, "Image gen not available — install diffusers+flux")
-    
+
     width, height = map(int, req.size.split("x"))
-    
+
     images = []
     for _ in range(req.n):
         img = pipe(
@@ -316,18 +314,19 @@ async def generate_image(req: ImageGenRequest):
             guidance_scale=0.0,
         ).images[0]
         images.append(img)
-    
+
     if req.response_format == "url":
         # Save and return local URLs (in production, upload to S3/CDN)
         urls = []
-        for i, img in enumerate(images):
+        for _i, img in enumerate(images):
             path = f"/tmp/modo-img-{uuid.uuid4().hex[:8]}.png"
             img.save(path)
             urls.append({"url": f"file://{path}"})
         return {"created": int(time.time()), "data": urls}
     else:
         # b64_json
-        import base64, io
+        import base64
+        import io
         b64s = []
         for img in images:
             buf = io.BytesIO()
@@ -342,7 +341,7 @@ async def generate_video(req: VideoGenRequest):
     pipe = get_ltx()
     if not pipe:
         raise HTTPException(501, "Video gen not available — install diffusers+ltx-video")
-    
+
     videos = []
     for _ in range(req.n):
         frames = pipe(
@@ -353,13 +352,13 @@ async def generate_video(req: VideoGenRequest):
             num_inference_steps=25,
             guidance_scale=3.0,
         ).frames[0]
-        
+
         # Save as MP4
         import imageio
         path = f"/tmp/modo-vid-{uuid.uuid4().hex[:8]}.mp4"
         imageio.mimsave(path, frames, fps=req.fps)
         videos.append({"url": f"file://{path}"})
-    
+
     return {"created": int(time.time()), "data": videos}
 
 
@@ -386,7 +385,9 @@ async def health():
 
 if __name__ == "__main__":
     import time
+
     import numpy as np
-    
+
     port = int(os.getenv("PORT", "8000"))
     uvicorn.run(app, host="0.0.0.0", port=port)
+

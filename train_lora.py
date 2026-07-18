@@ -4,16 +4,13 @@ MODO S1 — LoRA fine-tuning for Nemotron 3 Ultra (53B, Apache 2.0)
 Run on H100/A100. Uses Unsloth for 2x speed, 70% less VRAM.
 """
 
-import os
-import json
 import argparse
-from pathlib import Path
 
 import torch
-from datasets import load_dataset, concatenate_datasets
-from unsloth import FastLanguageModel
-from trl import SFTTrainer
+from datasets import load_dataset
 from transformers import TrainingArguments
+from trl import SFTTrainer
+from unsloth import FastLanguageModel
 
 # ponytail: minimal config, no bloat
 MAX_SEQ_LEN = 8192
@@ -28,7 +25,7 @@ def load_data(data_path: str):
         ds = load_dataset("json", data_files=data_path, split="train")
     else:
         ds = load_dataset(data_path, split="train")
-    
+
     def format(example):
         # Handle various formats: messages, prompt/completion, instruction/input/output
         if "messages" in example:
@@ -39,7 +36,7 @@ def load_data(data_path: str):
             out = example.get("output") or example.get("response") or ""
             return {"text": [{"role": "user", "content": example["instruction"] + (" " + example.get("input", ""))}, {"role": "assistant", "content": out}]}
         return {"text": []}
-    
+
     return ds.map(format, remove_columns=ds.column_names)
 
 def main():

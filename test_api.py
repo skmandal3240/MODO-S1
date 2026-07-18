@@ -4,12 +4,11 @@ MODO S1 — Quick test script
 Verifies the API endpoints work correctly.
 """
 
+import json
 import os
 import sys
-import time
-import subprocess
+
 import requests
-import json
 
 API_BASE = os.getenv("MODO_API", "http://localhost:8000")
 
@@ -60,7 +59,7 @@ def test_streaming():
     }
     r = requests.post(f"{API_BASE}/v1/chat/completions", json=payload, stream=True, timeout=30)
     assert r.status_code == 200
-    
+
     chunks = []
     for line in r.iter_lines():
         if line:
@@ -70,7 +69,7 @@ def test_streaming():
                     data = json.loads(line[6:])
                     if "choices" in data and data["choices"][0].get("delta", {}).get("content"):
                         chunks.append(data["choices"][0]["delta"]["content"])
-                except:
+                except Exception:
                     pass
     print(f"  ✓ Streamed: {''.join(chunks)[:200]}...")
     return True
@@ -83,20 +82,20 @@ def test_audio_transcription():
 
 def main():
     print(f"\n{'='*50}")
-    print(f"MODO S1 API Test Suite")
+    print("MODO S1 API Test Suite")
     print(f"Target: {API_BASE}")
     print(f"{'='*50}\n")
-    
+
     tests = [
         test_health,
         test_models,
         test_chat,
         test_streaming,
     ]
-    
+
     passed = 0
     failed = 0
-    
+
     for test in tests:
         try:
             test()
@@ -105,13 +104,14 @@ def main():
             print(f"  ✗ FAILED: {e}")
             failed += 1
         print()
-    
+
     print(f"{'='*50}")
     print(f"Results: {passed} passed, {failed} failed")
     print(f"{'='*50}")
-    
+
     if failed > 0:
         sys.exit(1)
 
 if __name__ == "__main__":
     main()
+

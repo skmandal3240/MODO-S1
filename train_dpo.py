@@ -4,17 +4,15 @@ MODO S1 — DPO training for "badass" personality
 Uses synthetic preference pairs: (badass_response, hedging_response)
 """
 
-import os
-import json
 import argparse
+import json
 from pathlib import Path
 
 import torch
 from datasets import Dataset
-from unsloth import FastLanguageModel
-from trl import DPOTrainer
 from transformers import TrainingArguments
-
+from trl import DPOTrainer
+from unsloth import FastLanguageModel
 
 # ========== Personality Preference Pairs ==========
 BADASS_PAIRS = [
@@ -64,12 +62,12 @@ BADASS_PAIRS = [
 def generate_preferences(out_path: str, num_samples: int = 5000):
     """Generate DPO preference dataset from pairs + variations."""
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
-    
+
     with open(out_path, "w") as f:
         # Core pairs
         for pair in BADASS_PAIRS:
             f.write(json.dumps(pair) + "\n")
-        
+
         # Augment with variations
         import random
         variations = [
@@ -81,7 +79,7 @@ def generate_preferences(out_path: str, num_samples: int = 5000):
             "One-liner.",
             "Explain like I'm a senior engineer.",
         ]
-        
+
         for _ in range(num_samples - len(BADASS_PAIRS)):
             base = random.choice(BADASS_PAIRS)
             var = random.choice(variations)
@@ -90,25 +88,25 @@ def generate_preferences(out_path: str, num_samples: int = 5000):
                 "chosen": base["chosen"],
                 "rejected": base["rejected"],
             }) + "\n")
-    
+
     print(f"[MODO S1] Generated {num_samples} preference pairs at {out_path}")
 
 
 def train_dpo(base_model: str, adapter_path: str, pref_data: str, out_path: str, epochs: int = 1):
     """DPO training on top of SFT adapter."""
     print(f"[MODO S1] Loading {base_model} + {adapter_path} for DPO")
-    
+
     model, tokenizer = FastLanguageModel.from_pretrained(
         model_name=base_model,
         max_seq_length=8192,
         dtype=torch.bfloat16,
         load_in_4bit=True,
     )
-    
+
     # Load SFT adapter
     model.load_adapter(adapter_path, adapter_name="sft")
     model.set_adapter("sft")
-    
+
     # Add DPO LoRA on top
     model = FastLanguageModel.get_peft_model(
         model,
@@ -120,14 +118,14 @@ def train_dpo(base_model: str, adapter_path: str, pref_data: str, out_path: str,
         use_gradient_checkpointing="unsloth",
         random_state=42,
     )
-    
+
     # Load preferences
     data = []
     with open(pref_data) as f:
         for line in f:
             data.append(json.loads(line))
     ds = Dataset.from_list(data)
-    
+
     trainer = DPOTrainer(
         model=model,
         ref_model=None,  # Use same model as reference (peft)
@@ -152,19 +150,19 @@ def train_dpo(base_model: str, adapter_path: str, pref_data: str, out_path: str,
         max_length=4096,
         max_prompt_length=2048,
     )
-    
+
     print("[MODO S1] DPO training...")
     trainer.train()
-    
+
     print(f"[MODO S1] Saving DPO adapter to {out_path}")
     model.save_pretrained(out_path)
     tokenizer.save_pretrained(out_path)
-    
+
     # Merge for deployment
     merged = f"{out_path}-merged"
     print(f"[MODO S1] Merging to {merged}")
     model.save_pretrained_merged(merged, tokenizer, save_method="merged_16bit")
-    
+
     print("[MODO S1] DPO complete.")
 
 
@@ -178,10 +176,10 @@ def main():
     ap.add_argument("--epochs", type=int, default=1)
     ap.add_argument("--samples", type=int, default=5000)
     args = ap.parse_args()
-    
+
     if args.generate_only or not Path(args.pref_data).exists():
         generate_preferences(args.pref_data, args.samples)
-    
+
     if not args.generate_only:
         train_dpo(args.base, args.adapter, args.pref_data, args.out, args.epochs)
 

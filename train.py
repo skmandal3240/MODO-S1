@@ -4,11 +4,11 @@ MODO S1 — Master training script
 Runs: data prep → LoRA SFT → DPO personality → merge → deploy prep
 """
 
-import os
-import subprocess
 import argparse
+import subprocess
 import sys
 from pathlib import Path
+
 
 def run(cmd, desc, check=True):
     print(f"\n{'='*60}")
@@ -54,9 +54,9 @@ def main():
             f"--scientific-ratio {args.scientific_ratio}",
             "Preparing training data (scientific + general + code + Indian languages)"
         )
-        
+
         run(
-            f"python generate_dpo.py --out data/dpo_preferences.jsonl --samples 10000",
+            "python generate_dpo.py --out data/dpo_preferences.jsonl --samples 10000",
             "Generating DPO preference data for badass personality"
         )
     else:
@@ -79,7 +79,7 @@ def main():
         sft_adapter = "adapters/modo-s1-sft"
         if not Path(f"{sft_adapter}/adapter_config.json").exists():
             sft_adapter = "adapters/modo-s1-sft-merged"
-        
+
         run(
             f"python train_dpo.py --base {args.base} "
             f"--adapter {sft_adapter} "
@@ -96,7 +96,7 @@ def main():
         final_adapter = "adapters/modo-s1-dpo"
         if not Path(f"{final_adapter}/adapter_config.json").exists():
             final_adapter = "adapters/modo-s1-sft"
-        
+
         run(
             f"python -c \""
             f"from unsloth import FastLanguageModel; "
