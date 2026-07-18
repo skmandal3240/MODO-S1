@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "modo-s1"
+version = "1.0.0"
+description = "MODO S1 — Commercial multimodal AI API (Nemotron 3 Ultra + LoRA)"
+readme = "README.md"
+license = {text = "Apache-2.0"}
+authors = [{name = "MODO AI", email = "team@modo.ai"}]
+requires-python = ">=3.11"
+dependencies = []
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+[project.optional-dependencies]
+train = [
+    "torch>=2.4.0",
+    "transformers>=4.42.0",
+    "accelerate>=0.33.0",
+    "peft>=0.12.0",
+    "trl>=0.9.6",
+    "unsloth>=2024.9",
+    "datasets>=2.20.0",
+    "huggingface-hub>=0.23.0",
+]
+serve = [
+    "vllm==0.5.3.post1",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "pydantic>=2.7.0",
+]
+multimodal = [
+    "openai-whisper>=20240930",
+    "kokoro-onnx>=0.1.0",
+    "diffusers>=0.30.0",
+    "xformers>=0.0.27",
+    "opencv-python>=4.10.0",
+    "imageio>=2.35.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["modo*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]

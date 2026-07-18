@@ -1,0 +1,46 @@
+# MODO S1 .gitignore
+# Models & adapters (large files)
+*.bin
+*.safetensors
+*.gguf
+*.onnx
+adapters/*/
+!adapters/*/adapter_config.json
+!adapters/*/tokenizer*.json
+!adapters/*/special_tokens_map.json
+models/
+/data/*.jsonl
+/tmp/
+*.mp4
+*.wav
+*.png
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+env/
+.env
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+wandb/
+
+# Docker
+.docker/

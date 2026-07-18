@@ -1,0 +1,44 @@
+# MODO S1 — Core dependencies
+torch>=2.4.0
+transformers>=4.42.0
+accelerate>=0.33.0
+peft>=0.12.0
+trl>=0.9.6
+unsloth>=2024.9
+datasets>=2.20.0
+tokenizers>=0.19.1
+
+# vLLM serving
+vllm==0.5.3.post1
+
+# API
+fastapi>=0.111.0
+uvicorn>=0.30.0
+pydantic>=2.7.0
+pydantic-settings>=2.3.0
+python-multipart>=0.0.9
+
+# Audio
+openai-whisper>=20240930
+kokoro-onnx>=0.1.0
+soundfile>=0.12.0
+librosa>=0.10.0
+
+# Image/Video (diffusers)
+diffusers>=0.30.0
+transformers>=4.42.0
+accelerate>=0.33.0
+xformers>=0.0.27
+opencv-python>=4.10.0
+imageio>=2.35.0
+imageio-ffmpeg>=0.5.0
+
+# Scientific data
+huggingface-hub>=0.23.0
+tqdm>=4.66.0
+
+# Utils
+python-dotenv>=1.0.0
+pyyaml>=6.0.1
+numpy>=1.26.0
+scipy>=1.13.0
