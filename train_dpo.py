@@ -10,7 +10,6 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset
-from transformers import TrainingArguments
 from trl import DPOTrainer
 from unsloth import FastLanguageModel
 
