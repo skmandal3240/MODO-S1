@@ -34,7 +34,8 @@ jobs:
       - name: Type check (mypy)
         run: |
           pip install mypy
-          mypy --ignore-missing-imports train_lora.py server.py prepare_data.py train_dpo.py 2>&1 | head -50 || echo "mypy warnings ignored"
+          mypy --ignore-missing-imports train_lora.py server.py prepare_data.py train_dpo.py 2>&1 | head -50
+        continue-on-error: true
       
       - name: Syntax check
         run: |
