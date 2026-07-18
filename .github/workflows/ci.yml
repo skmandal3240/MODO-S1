@@ -34,7 +34,7 @@ jobs:
       - name: Type check (mypy)
         run: |
           pip install mypy
-          mypy --ignore-missing-imports train_lora.py server.py prepare_data.py train_dpo.py 2>/dev/null || true
+          mypy --ignore-missing-imports train_lora.py server.py prepare_data.py train_dpo.py 2>/dev/null || echo "mypy skipped"
       
       - name: Syntax check
         run: |
